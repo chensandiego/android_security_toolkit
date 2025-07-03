@@ -5,3 +5,7 @@ scikit-learn
 pandas
 python-multipart
 jinja2
+
+run the app
+
+python main.py
