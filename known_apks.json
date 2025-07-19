@@ -1,0 +1,29 @@
+[
+    {
+        "label": "Malicious",
+        "features": {
+            "permissions": ["android.permission.SEND_SMS", "android.permission.READ_PHONE_STATE", "android.permission.WRITE_EXTERNAL_STORAGE"],
+            "activities": ["com.example.malicious.MainActivity"],
+            "services": ["com.example.malicious.BackgroundService"],
+            "receivers": ["com.example.malicious.BootReceiver"]
+        }
+    },
+    {
+        "label": "Benign",
+        "features": {
+            "permissions": ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"],
+            "activities": ["com.example.benign.MainActivity", "com.example.benign.SettingsActivity"],
+            "services": [],
+            "receivers": []
+        }
+    },
+    {
+        "label": "Intent Attack",
+        "features": {
+            "permissions": ["android.permission.INTERNET"],
+            "activities": ["com.example.intent.AttackActivity"],
+            "services": [],
+            "receivers": ["com.example.intent.HijackReceiver"]
+        }
+    }
+]

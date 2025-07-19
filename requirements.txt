@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+androguard
+scikit-learn
+pandas
+python-multipart
+jinja2
+

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Security Analysis</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+        #results {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload APK for Analysis</h1>
+    <form id="upload-form">
+        <input type="file" name="file" id="file-input" accept=".apk">
+        <button type="submit">Analyze</button>
+    </form>
+
+    <div id="results" style="display:none;">
+        <h2>Analysis Results</h2>
+        <p><strong>Filename:</strong> <span id="filename"></span></p>
+        <p><strong>Classification:</strong> <span id="classification"></span></p>
+        <h3>Features</h3>
+        <pre id="features"></pre>
+
+        <h3>Hardcoded Secrets</h3>
+        <div id="hardcoded-secrets"></div>
+
+        <h3>Identified Libraries</h3>
+        <div id="identified-libraries"></div>
+
+        <h3>Vulnerabilities</h3>
+        <div id="vulnerabilities"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const resultsDiv = document.getElementById('results');
+        const filenameSpan = document.getElementById('filename');
+        const classificationSpan = document.getElementById('classification');
+        const featuresPre = document.getElementById('features');
+        const hardcodedSecretsDiv = document.getElementById('hardcoded-secrets');
+        const identifiedLibrariesDiv = document.getElementById('identified-libraries');
+        const vulnerabilitiesDiv = document.getElementById('vulnerabilities');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('file', document.getElementById('file-input').files[0]);
+
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            filenameSpan.textContent = data.filename;
+            classificationSpan.textContent = data.classification;
+            featuresPre.textContent = JSON.stringify(data.features.permissions, null, 2) + "\n" +
+                                      JSON.stringify(data.features.activities, null, 2) + "\n" +
+                                      JSON.stringify(data.features.services, null, 2) + "\n" +
+                                      JSON.stringify(data.features.receivers, null, 2);
+
+            // Display hardcoded secrets
+            hardcodedSecretsDiv.innerHTML = ''; // Clear previous results
+            if (Object.keys(data.features.hardcoded_secrets).length > 0) {
+                for (const file in data.features.hardcoded_secrets) {
+                    const fileSecrets = data.features.hardcoded_secrets[file];
+                    const fileDiv = document.createElement('div');
+                    fileDiv.innerHTML = `<h4>File: ${file}</h4>`;
+                    for (const type in fileSecrets) {
+                        const patterns = fileSecrets[type];
+                        fileDiv.innerHTML += `<p><strong>${type}:</strong> ${patterns.join(', ')}</p>`;
+                    }
+                    hardcodedSecretsDiv.appendChild(fileDiv);
+                }
+            } else {
+                hardcodedSecretsDiv.textContent = 'No hardcoded secrets found.';
+            }
+
+            // Display identified libraries
+            identifiedLibrariesDiv.innerHTML = ''; // Clear previous results
+            if (data.features.identified_libraries && data.features.identified_libraries.length > 0) {
+                const ul = document.createElement('ul');
+                data.features.identified_libraries.forEach(lib => {
+                    const li = document.createElement('li');
+                    li.textContent = lib;
+                    ul.appendChild(li);
+                });
+                identifiedLibrariesDiv.appendChild(ul);
+            } else {
+                identifiedLibrariesDiv.textContent = 'No third-party libraries identified.';
+            }
+
+            // Display vulnerabilities
+            vulnerabilitiesDiv.innerHTML = ''; // Clear previous results
+            if (data.features.vulnerabilities && data.features.vulnerabilities.length > 0) {
+                const ul = document.createElement('ul');
+                data.features.vulnerabilities.forEach(vuln => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<strong>CVE:</strong> ${vuln.cve}<br><strong>Description:</strong> ${vuln.description}<br><strong>Severity:</strong> ${vuln.severity}`;
+                    ul.appendChild(li);
+                });
+                vulnerabilitiesDiv.appendChild(ul);
+            } else {
+                vulnerabilitiesDiv.textContent = 'No known vulnerabilities found for identified libraries.';
+            }
+
+            resultsDiv.style.display = 'block';
+        });
+    </script>
+</body>
+</html>
