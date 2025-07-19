@@ -5,4 +5,4 @@ scikit-learn
 pandas
 python-multipart
 jinja2
-
+requests

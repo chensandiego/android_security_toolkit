@@ -7,10 +7,20 @@ This toolkit analyzes Android APK files to identify potential security threats. 
 -   **APK Feature Extraction:** Extracts permissions, activities, services, and receivers from APK files.
 -   **Hardcoded Secret Detection:** Identifies hardcoded secrets like API keys, passwords, and sensitive URLs within the APK.
 -   **Library Identification:** Detects common third-party libraries used in the APK.
--   **Vulnerability Scanning:** Checks identified libraries against a simplified local vulnerability database for known issues.
+-   **Live Vulnerability Scanning:** Checks identified libraries against the National Vulnerability Database (NVD) for up-to-date threat information.
 -   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features.
 -   **Similarity Analysis:** Compares the fingerprint of an uploaded APK to a knowledge base of known APKs.
 -   **Machine Learning Classification:** Uses a machine learning model to classify APKs as benign, malicious, or suspicious.
+
+## How NVD Integration Works
+
+The toolkit now uses the National Vulnerability Database (NVD) to provide real-time vulnerability information for identified libraries. When an APK is analyzed, the following steps occur:
+
+1.  **Library Identification:** The toolkit identifies third-party libraries included in the APK.
+2.  **NVD API Query:** For each identified library, the toolkit queries the NVD API.
+3.  **Vulnerability Reporting:** Any vulnerabilities associated with the library are fetched from the NVD and displayed in the analysis results.
+
+This ensures that the vulnerability scan is always based on the latest publicly available information.
 
 ## Project Setup
 
