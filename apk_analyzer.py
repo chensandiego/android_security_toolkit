@@ -81,22 +81,30 @@ def identify_libraries(dx_object):
 
 def fetch_vulnerabilities_from_nvd(library_name):
     """
-    Fetches vulnerability data from the National Vulnerability Database (NVD).
+    Fetches vulnerability data from the National Vulnerability Database (NVD) using API 2.0.
     """
-    base_url = "https://services.nvd.nist.gov/rest/json/cves/1.0"
-    # A more specific keyword search might be needed depending on library naming conventions
-    keyword = library_name.split('.')[-1] # Example: com.squareup.okhttp -> okhttp
-    params = {'keyword': keyword}
+    base_url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    keyword = library_name.split('.')[-1]
+    params = {'keywordSearch': keyword}
     try:
         response = requests.get(base_url, params=params)
-        response.raise_for_status() # Raise an exception for bad status codes
+        response.raise_for_status()
         data = response.json()
         vulnerabilities = []
-        if 'result' in data and 'CVE_Items' in data['result']:
-            for item in data['result']['CVE_Items']:
-                cve_id = item['cve']['CVE_data_meta']['ID']
-                description = item['cve']['description']['description_data'][0]['value']
-                severity = item['impact']['baseMetricV2']['severity'] if 'baseMetricV2' in item['impact'] else "N/A"
+        if 'vulnerabilities' in data:
+            for item in data['vulnerabilities']:
+                cve = item.get('cve', {})
+                cve_id = cve.get('id', 'N/A')
+                description = 'N/A'
+                if cve.get('descriptions'):
+                    for desc in cve['descriptions']:
+                        if desc.get('lang') == 'en':
+                            description = desc.get('value', 'N/A')
+                            break
+                severity = "N/A"
+                if 'metrics' in cve and 'cvssMetricV2' in cve['metrics'] and cve['metrics']['cvssMetricV2']:
+                    severity = cve['metrics']['cvssMetricV2'][0].get('baseSeverity', "N/A")
+
                 vulnerabilities.append({"cve": cve_id, "description": description, "severity": severity})
         return vulnerabilities
     except requests.exceptions.RequestException as e:
@@ -204,6 +212,7 @@ def analyze_apk_features(file_path):
     insecure_communication_findings = check_insecure_communication(dx)
     insecure_data_storage_findings = check_insecure_data_storage(a, dx)
     webview_vulnerabilities = check_webview_vulnerabilities(dx)
+    suspicious_api_calls = detect_suspicious_api_calls(dx)
     return {
         "permissions": permissions,
         "activities": activities,
@@ -214,5 +223,32 @@ def analyze_apk_features(file_path):
         "vulnerabilities": vulnerabilities,
         "insecure_communication": insecure_communication_findings,
         "insecure_data_storage": insecure_data_storage_findings,
-        "webview_vulnerabilities": webview_vulnerabilities
+        "webview_vulnerabilities": webview_vulnerabilities,
+        "suspicious_api_calls": suspicious_api_calls
     }
+
+def detect_suspicious_api_calls(dx_object):
+    suspicious_calls = []
+    suspicious_api_patterns = {
+        "SMS": ["Landroid/telephony/SmsManager;->sendTextMessage"],
+        "RuntimeExecution": ["Ljava/lang/Runtime;->exec"],
+        "Reflection": ["Ljava/lang/reflect/Method;->invoke"],
+        "DexClassLoader": ["Ldalvik/system/DexClassLoader;-><init>"],
+        "Location": ["Landroid/location/LocationManager;->getLastKnownLocation"],
+        "Contacts": ["Landroid/provider/ContactsContract$CommonDataKinds$Phone;->query"],
+        "Camera": ["Landroid/hardware/Camera;->open"],
+        "Microphone": ["Landroid/media/AudioRecord;->startRecording"],
+        "FileSystem": ["Ljava/io/File;->delete", "Ljava/io/File;->mkdir"],
+        "Crypto": ["Ljavax/crypto/Cipher;->getInstance"]
+    }
+
+    for method in dx_object.get_methods():
+        if method.is_external():
+            continue
+        for _, call, _ in method.get_xref_ins_and_outs():
+            for category, apis in suspicious_api_patterns.items():
+                for api in apis:
+                    if api in call.get_class_name() + "->" + call.get_name():
+                        suspicious_calls.append(f"{category}: {call.get_class_name()}->{call.get_name()}")
+    
+    return list(set(suspicious_calls))

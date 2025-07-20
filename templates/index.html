@@ -1,159 +1,238 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Android Security Analysis</title>
+    <title>Android Security Toolkit</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            font-family: sans-serif;
+            background-color: #f8f9fa;
         }
-        #results {
-            margin-top: 20px;
-            border: 1px solid #ccc;
-            padding: 10px;
+        .container {
+            margin-top: 50px;
+        }
+        .card {
+            margin-bottom: 20px;
+        }
+        .card-header {
+            font-weight: bold;
+        }
+        .list-group-item {
+            word-break: break-all;
+        }
+        #loading {
+            display: none;
+            text-align: center;
+            margin-top: 50px;
         }
     </style>
 </head>
 <body>
-    <h1>Upload APK for Analysis</h1>
-    <form id="upload-form">
-        <input type="file" name="file" id="file-input" accept=".apk">
-        <button type="submit">Analyze</button>
-    </form>
+    <div class="container">
+        <h1 class="text-center mb-4">Android Security Analysis</h1>
+        <div class="card">
+            <div class="card-body">
+                <form id="upload-form">
+                    <div class="input-group">
+                        <input type="file" class="form-control" name="file" id="file-input" accept=".apk" required>
+                        <button type="submit" class="btn btn-primary">Analyze</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
-    <div id="results" style="display:none;">
-        <h2>Analysis Results</h2>
-        <p><strong>Filename:</strong> <span id="filename"></span></p>
-        <p><strong>Classification:</strong> <span id="classification"></span></p>
-        <h3>Features</h3>
-        <pre id="features"></pre>
+        <div id="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Analyzing APK... this may take a moment.</p>
+        </div>
 
-        <h3>Hardcoded Secrets</h3>
-        <div id="hardcoded-secrets"></div>
+        <div id="results" style="display:none;">
+            <div class="card">
+                <div class="card-header">Overall Assessment</div>
+                <div class="card-body">
+                    <p><strong>Filename:</strong> <span id="filename"></span></p>
+                    <p><strong>Classification:</strong> <span id="classification" class="fw-bold"></span></p>
+                    <p><strong>Similarity Score:</strong> <span id="similarity"></span></p>
+                </div>
+            </div>
 
-        <h3>Identified Libraries</h3>
-        <div id="identified-libraries"></div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Permissions</div>
+                        <ul id="permissionsList" class="list-group list-group-flush"></ul>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Identified Libraries</div>
+                        <ul id="librariesList" class="list-group list-group-flush"></ul>
+                    </div>
+                </div>
+            </div>
 
-        <h3>Vulnerabilities:</h3>
-            <ul id="vulnerabilitiesList"></ul>
+            <div class="card">
+                <div class="card-header text-danger">Vulnerabilities & Exposures</div>
+                <div class="card-body">
+                    <h5>Hardcoded Secrets</h5>
+                    <div id="secretsList"></div>
+                    <hr>
+                    <h5>Known Vulnerabilities (from NVD)</h5>
+                    <ul id="vulnerabilitiesList" class="list-group"></ul>
+                    <hr>
+                    <h5>Insecure Communication</h5>
+                    <ul id="insecureCommList" class="list-group"></ul>
+                    <hr>
+                    <h5>Insecure Data Storage</h5>
+                    <ul id="insecureStorageList" class="list-group"></ul>
+                    <hr>
+                    <h5>WebView Vulnerabilities</h5>
+                    <ul id="webviewVulnsList" class="list-group"></ul>
+                </div>
+            </div>
 
-            <h3>Insecure Communication Findings:</h3>
-            <ul id="insecureCommunicationList"></ul>
-
-            <h3>Insecure Data Storage Findings:</h3>
-            <ul id="insecureDataStorageList"></ul>
-
-            <h3>WebView Vulnerabilities:</h3>
-            <ul id="webviewVulnerabilitiesList"></ul>
+            <div class="accordion" id="componentAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingActivities">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseActivities" aria-expanded="false" aria-controls="collapseActivities">
+                            Activities
+                        </button>
+                    </h2>
+                    <div id="collapseActivities" class="accordion-collapse collapse" aria-labelledby="headingActivities" data-bs-parent="#componentAccordion">
+                        <div class="accordion-body">
+                            <ul id="activitiesList" class="list-group"></ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingServices">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseServices" aria-expanded="false" aria-controls="collapseServices">
+                            Services
+                        </button>
+                    </h2>
+                    <div id="collapseServices" class="accordion-collapse collapse" aria-labelledby="headingServices" data-bs-parent="#componentAccordion">
+                        <div class="accordion-body">
+                            <ul id="servicesList" class="list-group"></ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingReceivers">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseReceivers" aria-expanded="false" aria-controls="collapseReceivers">
+                            Receivers
+                        </button>
+                    </h2>
+                    <div id="collapseReceivers" class="accordion-collapse collapse" aria-labelledby="headingReceivers" data-bs-parent="#componentAccordion">
+                        <div class="accordion-body">
+                            <ul id="receiversList" class="list-group"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('apkUploadForm').addEventListener('submit', async (event) => {
+        document.getElementById('upload-form').addEventListener('submit', async (event) => {
             event.preventDefault();
-            const formData = new FormData(event.target);
+            const form = event.target;
+            const fileInput = document.getElementById('file-input');
+            const resultsDiv = document.getElementById('results');
+            const loadingDiv = document.getElementById('loading');
+
+            resultsDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+
+            const formData = new FormData(form);
             const response = await fetch('/analyze', {
                 method: 'POST',
                 body: formData
             });
+
+            loadingDiv.style.display = 'none';
             const result = await response.json();
-            document.getElementById('resultFilename').textContent = result.filename;
-            document.getElementById('resultClassification').textContent = result.classification;
-            document.getElementById('resultSimilarity').textContent = result.similarity;
+            
+            // Populate results
+            document.getElementById('filename').textContent = result.filename;
+            document.getElementById('classification').textContent = result.classification;
+            document.getElementById('similarity').textContent = result.similarity;
 
-            const features = result.features;
+            const { features } = result;
 
-            // Clear previous results
-            document.getElementById('permissionsList').innerHTML = '';
-            document.getElementById('activitiesList').innerHTML = '';
-            document.getElementById('servicesList').innerHTML = '';
-            document.getElementById('receiversList').innerHTML = '';
-            document.getElementById('hardcodedSecretsList').innerHTML = '';
-            document.getElementById('identifiedLibrariesList').innerHTML = '';
-            document.getElementById('vulnerabilitiesList').innerHTML = '';
-            document.getElementById('insecureCommunicationList').innerHTML = '';
-            document.getElementById('insecureDataStorageList').innerHTML = '';
-            document.getElementById('webviewVulnerabilitiesList').innerHTML = '';
-
-            // Populate permissions
-            features.permissions.forEach(p => {
-                const li = document.createElement('li');
-                li.textContent = p;
-                document.getElementById('permissionsList').appendChild(li);
-            });
-
-            // Populate activities
-            features.activities.forEach(a => {
-                const li = document.createElement('li');
-                li.textContent = a;
-                document.getElementById('activitiesList').appendChild(li);
-            });
-
-            // Populate services
-            features.services.forEach(s => {
-                const li = document.createElement('li');
-                li.textContent = s;
-                document.getElementById('servicesList').appendChild(li);
-            });
-
-            // Populate receivers
-            features.receivers.forEach(r => {
-                const li = document.createElement('li');
-                li.textContent = r;
-                document.getElementById('receiversList').appendChild(li);
-            });
-
-            // Populate hardcoded secrets
-            for (const file in features.hardcoded_secrets) {
-                const li = document.createElement('li');
-                li.innerHTML = `<strong>${file}:</strong>`;
-                const ul = document.createElement('ul');
-                for (const secret_type in features.hardcoded_secrets[file]) {
-                    const secret_li = document.createElement('li');
-                    secret_li.textContent = `${secret_type}: ${features.hardcoded_secrets[file][secret_type].join(', ')}`;
-                    ul.appendChild(secret_li);
+            // Helper to populate a list
+            const populateList = (elementId, items) => {
+                const list = document.getElementById(elementId);
+                list.innerHTML = '';
+                if (items && items.length > 0) {
+                    items.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item';
+                        li.textContent = item;
+                        list.appendChild(li);
+                    });
+                } else {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item text-muted';
+                    li.textContent = 'None found.';
+                    list.appendChild(li);
                 }
-                li.appendChild(ul);
-                document.getElementById('hardcodedSecretsList').appendChild(li);
-            }
-
-            // Populate identified libraries
-            features.identified_libraries.forEach(lib => {
-                const li = document.createElement('li');
-                li.textContent = lib;
-                document.getElementById('identifiedLibrariesList').appendChild(li);
-            });
+            };
+            
+            populateList('permissionsList', features.permissions);
+            populateList('librariesList', features.identified_libraries);
+            populateList('activitiesList', features.activities);
+            populateList('servicesList', features.services);
+            populateList('receiversList', features.receivers);
+            populateList('insecureCommList', features.insecure_communication);
+            populateList('insecureStorageList', features.insecure_data_storage);
+            populateList('webviewVulnsList', features.webview_vulnerabilities);
 
             // Populate vulnerabilities
-            features.vulnerabilities.forEach(vuln => {
-                const li = document.createElement('li');
-                li.textContent = `${vuln.cve} - ${vuln.description} (Severity: ${vuln.severity})`;
-                document.getElementById('vulnerabilitiesList').appendChild(li);
-            });
+            const vulnerabilitiesList = document.getElementById('vulnerabilitiesList');
+            vulnerabilitiesList.innerHTML = '';
+            if (features.vulnerabilities && features.vulnerabilities.length > 0) {
+                features.vulnerabilities.forEach(v => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item';
+                    li.innerHTML = `<strong>${v.cve}</strong> (Severity: ${v.severity})<br>${v.description}`;
+                    vulnerabilitiesList.appendChild(li);
+                });
+            } else {
+                 const li = document.createElement('li');
+                 li.className = 'list-group-item text-muted';
+                 li.textContent = 'None found.';
+                 vulnerabilitiesList.appendChild(li);
+            }
 
-            // Populate insecure communication findings
-            features.insecure_communication.forEach(finding => {
-                const li = document.createElement('li');
-                li.textContent = finding;
-                document.getElementById('insecureCommunicationList').appendChild(li);
-            });
+            // Populate hardcoded secrets
+            const secretsList = document.getElementById('secretsList');
+            secretsList.innerHTML = '';
+            if (features.hardcoded_secrets && Object.keys(features.hardcoded_secrets).length > 0) {
+                for (const file in features.hardcoded_secrets) {
+                    const p = document.createElement('p');
+                    p.innerHTML = `<strong>${file}:</strong>`;
+                    const ul = document.createElement('ul');
+                    for (const type in features.hardcoded_secrets[file]) {
+                        const li = document.createElement('li');
+                        li.textContent = `${type}: ${features.hardcoded_secrets[file][type].join(', ')}`;
+                        ul.appendChild(li);
+                    }
+                    p.appendChild(ul);
+                    secretsList.appendChild(p);
+                }
+            } else {
+                const p = document.createElement('p');
+                p.className = 'text-muted';
+                p.textContent = 'None found.';
+                secretsList.appendChild(p);
+            }
 
-            // Populate insecure data storage findings
-            features.insecure_data_storage.forEach(finding => {
-                const li = document.createElement('li');
-                li.textContent = finding;
-                document.getElementById('insecureDataStorageList').appendChild(li);
-            });
-
-            // Populate webview vulnerabilities
-            features.webview_vulnerabilities.forEach(finding => {
-                const li = document.createElement('li');
-                li.textContent = finding;
-                document.getElementById('webviewVulnerabilitiesList').appendChild(li);
-            });
-
-            document.getElementById('results').style.display = 'block';
+            resultsDiv.style.display = 'block';
         });
     </script>
 </body>

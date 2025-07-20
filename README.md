@@ -6,22 +6,20 @@ This toolkit analyzes Android APK files to identify potential security threats. 
 
 -   **APK Feature Extraction:** Extracts permissions, activities, services, and receivers from APK files.
 -   **Hardcoded Secret Detection:** Identifies hardcoded secrets like API keys, passwords, and sensitive URLs within the APK.
--   **Library Identification:** Detects common third-party libraries used in the APK.
-    -   **Live Vulnerability Scanning:** Checks identified libraries against the National Vulnerability Database (NVD) for up-to-date threat information.
-    -   **Static Code Analysis for Vulnerabilities:** Performs static analysis to identify common Android vulnerabilities, including insecure communication (e.g., cleartext HTTP), insecure data storage (e.g., `android:allowBackup="true"`, world-readable/writable files), and WebView misconfigurations (e.g., `setJavaScriptEnabled(true)`, `addJavascriptInterface`).
--   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features, now incorporating a richer set of features including permissions, activities, services, receivers, hardcoded secrets, identified libraries, and detected vulnerabilities (insecure communication, insecure data storage, WebView vulnerabilities).
+-   **Library Identification & Vulnerability Scanning:** Detects common third-party libraries and checks them against the National Vulnerability Database (NVD) for up-to-date threat information using the latest NVD API 2.0.
+-   **Static Code Analysis for Vulnerabilities:** Performs static analysis to identify common Android vulnerabilities, including:
+    -   Insecure communication (e.g., cleartext HTTP).
+    -   Insecure data storage (e.g., `android:allowBackup="true"`, world-readable/writable files).
+    -   WebView misconfigurations (e.g., `setJavaScriptEnabled(true)`, `addJavascriptInterface`).
+-   **Suspicious API Call Detection:** Scans for the use of potentially dangerous API calls related to SMS, runtime execution, reflection, and more.
+-   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features, incorporating a rich set of features including permissions, activities, services, receivers, hardcoded secrets, identified libraries, and detected vulnerabilities.
 -   **Similarity Analysis:** Compares the fingerprint of an uploaded APK to a knowledge base of known APKs.
--   **Machine Learning Classification:** Uses a machine learning model to classify APKs as benign, malicious, or suspicious. The model now utilizes an expanded set of features from the APK analysis and supports model persistence for faster loading.
-
-## How NVD Integration Works
-
-The toolkit now uses the National Vulnerability Database (NVD) to provide real-time vulnerability information for identified libraries. When an APK is analyzed, the following steps occur:
-
-1.  **Library Identification:** The toolkit identifies third-party libraries included in the APK.
-2.  **NVD API Query:** For each identified library, the toolkit queries the NVD API.
-3.  **Vulnerability Reporting:** Any vulnerabilities associated with the library are fetched from the NVD and displayed in the analysis results.
-
-This ensures that the vulnerability scan is always based on the latest publicly available information.
+-   **Advanced Machine Learning Classification:** Uses a `GradientBoostingClassifier` to classify APKs as benign, potentially malicious, or high-risk. The model is trained on a more descriptive feature set, including:
+    -   Counts of components (permissions, activities, etc.).
+    -   Ratio of dangerous permissions.
+    -   Ratio of native code.
+    -   Number of suspicious API calls.
+-   **Enhanced Web Interface:** A redesigned, user-friendly web interface for uploading APKs and viewing detailed, organized analysis reports with visual aids.
 
 ## Project Setup
 
