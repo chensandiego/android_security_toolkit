@@ -35,85 +35,125 @@
         <h3>Identified Libraries</h3>
         <div id="identified-libraries"></div>
 
-        <h3>Vulnerabilities</h3>
-        <div id="vulnerabilities"></div>
+        <h3>Vulnerabilities:</h3>
+            <ul id="vulnerabilitiesList"></ul>
+
+            <h3>Insecure Communication Findings:</h3>
+            <ul id="insecureCommunicationList"></ul>
+
+            <h3>Insecure Data Storage Findings:</h3>
+            <ul id="insecureDataStorageList"></ul>
+
+            <h3>WebView Vulnerabilities:</h3>
+            <ul id="webviewVulnerabilitiesList"></ul>
+        </div>
     </div>
 
     <script>
-        const form = document.getElementById('upload-form');
-        const resultsDiv = document.getElementById('results');
-        const filenameSpan = document.getElementById('filename');
-        const classificationSpan = document.getElementById('classification');
-        const featuresPre = document.getElementById('features');
-        const hardcodedSecretsDiv = document.getElementById('hardcoded-secrets');
-        const identifiedLibrariesDiv = document.getElementById('identified-libraries');
-        const vulnerabilitiesDiv = document.getElementById('vulnerabilities');
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData();
-            formData.append('file', document.getElementById('file-input').files[0]);
-
+        document.getElementById('apkUploadForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.target);
             const response = await fetch('/analyze', {
                 method: 'POST',
                 body: formData
             });
+            const result = await response.json();
+            document.getElementById('resultFilename').textContent = result.filename;
+            document.getElementById('resultClassification').textContent = result.classification;
+            document.getElementById('resultSimilarity').textContent = result.similarity;
 
-            const data = await response.json();
+            const features = result.features;
 
-            filenameSpan.textContent = data.filename;
-            classificationSpan.textContent = data.classification;
-            featuresPre.textContent = JSON.stringify(data.features.permissions, null, 2) + "\n" +
-                                      JSON.stringify(data.features.activities, null, 2) + "\n" +
-                                      JSON.stringify(data.features.services, null, 2) + "\n" +
-                                      JSON.stringify(data.features.receivers, null, 2);
+            // Clear previous results
+            document.getElementById('permissionsList').innerHTML = '';
+            document.getElementById('activitiesList').innerHTML = '';
+            document.getElementById('servicesList').innerHTML = '';
+            document.getElementById('receiversList').innerHTML = '';
+            document.getElementById('hardcodedSecretsList').innerHTML = '';
+            document.getElementById('identifiedLibrariesList').innerHTML = '';
+            document.getElementById('vulnerabilitiesList').innerHTML = '';
+            document.getElementById('insecureCommunicationList').innerHTML = '';
+            document.getElementById('insecureDataStorageList').innerHTML = '';
+            document.getElementById('webviewVulnerabilitiesList').innerHTML = '';
 
-            // Display hardcoded secrets
-            hardcodedSecretsDiv.innerHTML = ''; // Clear previous results
-            if (Object.keys(data.features.hardcoded_secrets).length > 0) {
-                for (const file in data.features.hardcoded_secrets) {
-                    const fileSecrets = data.features.hardcoded_secrets[file];
-                    const fileDiv = document.createElement('div');
-                    fileDiv.innerHTML = `<h4>File: ${file}</h4>`;
-                    for (const type in fileSecrets) {
-                        const patterns = fileSecrets[type];
-                        fileDiv.innerHTML += `<p><strong>${type}:</strong> ${patterns.join(', ')}</p>`;
-                    }
-                    hardcodedSecretsDiv.appendChild(fileDiv);
+            // Populate permissions
+            features.permissions.forEach(p => {
+                const li = document.createElement('li');
+                li.textContent = p;
+                document.getElementById('permissionsList').appendChild(li);
+            });
+
+            // Populate activities
+            features.activities.forEach(a => {
+                const li = document.createElement('li');
+                li.textContent = a;
+                document.getElementById('activitiesList').appendChild(li);
+            });
+
+            // Populate services
+            features.services.forEach(s => {
+                const li = document.createElement('li');
+                li.textContent = s;
+                document.getElementById('servicesList').appendChild(li);
+            });
+
+            // Populate receivers
+            features.receivers.forEach(r => {
+                const li = document.createElement('li');
+                li.textContent = r;
+                document.getElementById('receiversList').appendChild(li);
+            });
+
+            // Populate hardcoded secrets
+            for (const file in features.hardcoded_secrets) {
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>${file}:</strong>`;
+                const ul = document.createElement('ul');
+                for (const secret_type in features.hardcoded_secrets[file]) {
+                    const secret_li = document.createElement('li');
+                    secret_li.textContent = `${secret_type}: ${features.hardcoded_secrets[file][secret_type].join(', ')}`;
+                    ul.appendChild(secret_li);
                 }
-            } else {
-                hardcodedSecretsDiv.textContent = 'No hardcoded secrets found.';
+                li.appendChild(ul);
+                document.getElementById('hardcodedSecretsList').appendChild(li);
             }
 
-            // Display identified libraries
-            identifiedLibrariesDiv.innerHTML = ''; // Clear previous results
-            if (data.features.identified_libraries && data.features.identified_libraries.length > 0) {
-                const ul = document.createElement('ul');
-                data.features.identified_libraries.forEach(lib => {
-                    const li = document.createElement('li');
-                    li.textContent = lib;
-                    ul.appendChild(li);
-                });
-                identifiedLibrariesDiv.appendChild(ul);
-            } else {
-                identifiedLibrariesDiv.textContent = 'No third-party libraries identified.';
-            }
+            // Populate identified libraries
+            features.identified_libraries.forEach(lib => {
+                const li = document.createElement('li');
+                li.textContent = lib;
+                document.getElementById('identifiedLibrariesList').appendChild(li);
+            });
 
-            // Display vulnerabilities
-            vulnerabilitiesDiv.innerHTML = ''; // Clear previous results
-            if (data.features.vulnerabilities && data.features.vulnerabilities.length > 0) {
-                const ul = document.createElement('ul');
-                data.features.vulnerabilities.forEach(vuln => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<strong>CVE:</strong> ${vuln.cve}<br><strong>Description:</strong> ${vuln.description}<br><strong>Severity:</strong> ${vuln.severity}`;
-                    ul.appendChild(li);
-                });
-                vulnerabilitiesDiv.appendChild(ul);
-            } else {
-                vulnerabilitiesDiv.textContent = 'No known vulnerabilities found for identified libraries.';
-            }
+            // Populate vulnerabilities
+            features.vulnerabilities.forEach(vuln => {
+                const li = document.createElement('li');
+                li.textContent = `${vuln.cve} - ${vuln.description} (Severity: ${vuln.severity})`;
+                document.getElementById('vulnerabilitiesList').appendChild(li);
+            });
 
-            resultsDiv.style.display = 'block';
+            // Populate insecure communication findings
+            features.insecure_communication.forEach(finding => {
+                const li = document.createElement('li');
+                li.textContent = finding;
+                document.getElementById('insecureCommunicationList').appendChild(li);
+            });
+
+            // Populate insecure data storage findings
+            features.insecure_data_storage.forEach(finding => {
+                const li = document.createElement('li');
+                li.textContent = finding;
+                document.getElementById('insecureDataStorageList').appendChild(li);
+            });
+
+            // Populate webview vulnerabilities
+            features.webview_vulnerabilities.forEach(finding => {
+                const li = document.createElement('li');
+                li.textContent = finding;
+                document.getElementById('webviewVulnerabilitiesList').appendChild(li);
+            });
+
+            document.getElementById('results').style.display = 'block';
         });
     </script>
 </body>

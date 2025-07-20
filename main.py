@@ -47,7 +47,10 @@ async def analyze_apk_endpoint(file: UploadFile = File(...)):
             "receivers": features["receivers"],
             "hardcoded_secrets": features["hardcoded_secrets"],
             "identified_libraries": features["identified_libraries"],
-            "vulnerabilities": features["vulnerabilities"]
+            "vulnerabilities": features["vulnerabilities"],
+        "insecure_communication": features["insecure_communication"],
+        "insecure_data_storage": features["insecure_data_storage"],
+        "webview_vulnerabilities": features["webview_vulnerabilities"]
         }
     }
 

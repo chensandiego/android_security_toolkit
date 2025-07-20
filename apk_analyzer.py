@@ -112,6 +112,86 @@ def check_for_vulnerabilities(identified_libraries):
             found_vulnerabilities.extend(nvd_vulnerabilities)
     return found_vulnerabilities
 
+def check_insecure_communication(dx_object):
+    insecure_urls = []
+    for method in dx_object.get_methods():
+        if method.is_external():
+            continue
+        for _, call, _ in method.get_xref_ins_and_outs():
+            if call.get_name() == "Ljava/net/URL;-><init>(Ljava/lang/String;)V":
+                # Look for string literals passed to URL constructor
+                for _, ref in method.get_literals():
+                    if isinstance(ref, str) and ref.startswith("http://"):
+                        insecure_urls.append(ref)
+            elif call.get_name() == "Lorg/apache/http/client/methods/HttpGet;-><init>(Ljava/lang/String;)V":
+                for _, ref in method.get_literals():
+                    if isinstance(ref, str) and ref.startswith("http://"):
+                        insecure_urls.append(ref)
+            # Add more checks for other networking libraries if needed (e.g., OkHttp, Volley)
+    return list(set(insecure_urls))
+
+def check_insecure_data_storage(a_object, dx_object):
+    insecure_storage_findings = []
+
+    # Check AndroidManifest.xml for android:allowBackup="true"
+    try:
+        manifest_xml = a_object.get_android_manifest_xml()
+        allow_backup = manifest_xml.xpath("//application/@android:allowBackup")
+        if allow_backup and allow_backup[0].lower() == "true":
+            insecure_storage_findings.append("android:allowBackup="true" found in AndroidManifest.xml. Data can be backed up via ADB.")
+    except Exception as e:
+        print(f"Error checking allowBackup in manifest: {e}")
+
+    # Check for MODE_WORLD_READABLE/WRITEABLE in file operations
+    for method in dx_object.get_methods():
+        if method.is_external():
+            continue
+        for _, call, _ in method.get_xref_ins_and_outs():
+            if call.get_name() == "Landroid/content/Context;->openFileOutput(Ljava/lang/String;I)Ljava/io/FileOutputStream;":
+                # Check if MODE_WORLD_READABLE (0x2) or MODE_WORLD_WRITEABLE (0x4) is used
+                for arg in call.get_args():
+                    if isinstance(arg, int) and (arg & 0x2 or arg & 0x4):
+                        insecure_storage_findings.append(f"Insecure file output mode detected in {method.get_class_name()}->{method.get_name()} (MODE_WORLD_READABLE/WRITEABLE).")
+            elif call.get_name() == "Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;":
+                for arg in call.get_args():
+                    if isinstance(arg, int) and (arg & 0x2 or arg & 0x4):
+                        insecure_storage_findings.append(f"Insecure shared preferences mode detected in {method.get_class_name()}->{method.get_name()} (MODE_WORLD_READABLE/WRITEABLE).")
+
+    # Check for usage of Environment.getExternalStorageDirectory()
+    for method in dx_object.get_methods():
+        if method.is_external():
+            continue
+        for _, call, _ in method.get_xref_ins_and_outs():
+            if call.get_name() == "Landroid/os/Environment;->getExternalStorageDirectory()Ljava/io/File;":
+                insecure_storage_findings.append(f"Usage of Environment.getExternalStorageDirectory() detected in {method.get_class_name()}->{method.get_name()}. Data stored here is publicly accessible.")
+    return list(set(insecure_storage_findings))
+
+def check_webview_vulnerabilities(dx_object):
+    webview_findings = []
+    for method in dx_object.get_methods():
+        if method.is_external():
+            continue
+        for _, call, _ in method.get_xref_ins_and_outs():
+            # setJavaScriptEnabled(true)
+            if call.get_name() == "Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V":
+                # Check if the argument is 'true' (1)
+                for arg in call.get_args():
+                    if isinstance(arg, int) and arg == 1:
+                        webview_findings.append(f"WebView.setJavaScriptEnabled(true) detected in {method.get_class_name()}->{method.get_name()}. This can lead to XSS if not handled carefully.")
+            # addJavascriptInterface
+            elif call.get_name() == "Landroid/webkit/WebView;->addJavascriptInterface(Ljava/lang/Object;Ljava/lang/String;)V":
+                webview_findings.append(f"WebView.addJavascriptInterface detected in {method.get_class_name()}->{method.get_name()}. Ensure methods exposed are properly annotated with @JavascriptInterface (API 17+) and sensitive operations are not exposed.")
+            # setAllowFileAccessFromFileURLs(true) or setAllowUniversalAccessFromFileURLs(true)
+            elif call.get_name() == "Landroid/webkit/WebSettings;->setAllowFileAccessFromFileURLs(Z)V":
+                for arg in call.get_args():
+                    if isinstance(arg, int) and arg == 1:
+                        webview_findings.append(f"WebView.setAllowFileAccessFromFileURLs(true) detected in {method.get_class_name()}->{method.get_name()}. This can allow JavaScript in a local file to access other local files.")
+            elif call.get_name() == "Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V":
+                for arg in call.get_args():
+                    if isinstance(arg, int) and arg == 1:
+                        webview_findings.append(f"WebView.setAllowUniversalAccessFromFileURLs(true) detected in {method.get_class_name()}->{method.get_name()}. This can allow JavaScript in a local file to access content from any origin.")
+    return list(set(webview_findings))
+
 def analyze_apk_features(file_path):
     a, d, dx = AnalyzeAPK(file_path)
     permissions = a.get_permissions()
@@ -121,6 +201,9 @@ def analyze_apk_features(file_path):
     hardcoded_secrets = find_hardcoded_secrets(a)
     identified_libraries = identify_libraries(dx)
     vulnerabilities = check_for_vulnerabilities(identified_libraries)
+    insecure_communication_findings = check_insecure_communication(dx)
+    insecure_data_storage_findings = check_insecure_data_storage(a, dx)
+    webview_vulnerabilities = check_webview_vulnerabilities(dx)
     return {
         "permissions": permissions,
         "activities": activities,
@@ -128,5 +211,8 @@ def analyze_apk_features(file_path):
         "receivers": receivers,
         "hardcoded_secrets": hardcoded_secrets,
         "identified_libraries": identified_libraries,
-        "vulnerabilities": vulnerabilities
+        "vulnerabilities": vulnerabilities,
+        "insecure_communication": insecure_communication_findings,
+        "insecure_data_storage": insecure_data_storage_findings,
+        "webview_vulnerabilities": webview_vulnerabilities
     }

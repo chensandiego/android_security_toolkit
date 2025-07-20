@@ -7,10 +7,11 @@ This toolkit analyzes Android APK files to identify potential security threats. 
 -   **APK Feature Extraction:** Extracts permissions, activities, services, and receivers from APK files.
 -   **Hardcoded Secret Detection:** Identifies hardcoded secrets like API keys, passwords, and sensitive URLs within the APK.
 -   **Library Identification:** Detects common third-party libraries used in the APK.
--   **Live Vulnerability Scanning:** Checks identified libraries against the National Vulnerability Database (NVD) for up-to-date threat information.
--   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features.
+    -   **Live Vulnerability Scanning:** Checks identified libraries against the National Vulnerability Database (NVD) for up-to-date threat information.
+    -   **Static Code Analysis for Vulnerabilities:** Performs static analysis to identify common Android vulnerabilities, including insecure communication (e.g., cleartext HTTP), insecure data storage (e.g., `android:allowBackup="true"`, world-readable/writable files), and WebView misconfigurations (e.g., `setJavaScriptEnabled(true)`, `addJavascriptInterface`).
+-   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features, now incorporating a richer set of features including permissions, activities, services, receivers, hardcoded secrets, identified libraries, and detected vulnerabilities (insecure communication, insecure data storage, WebView vulnerabilities).
 -   **Similarity Analysis:** Compares the fingerprint of an uploaded APK to a knowledge base of known APKs.
--   **Machine Learning Classification:** Uses a machine learning model to classify APKs as benign, malicious, or suspicious.
+-   **Machine Learning Classification:** Uses a machine learning model to classify APKs as benign, malicious, or suspicious. The model now utilizes an expanded set of features from the APK analysis and supports model persistence for faster loading.
 
 ## How NVD Integration Works
 

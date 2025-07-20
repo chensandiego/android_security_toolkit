@@ -24,10 +24,33 @@ class BehavioralFingerprint:
 
     def _features_to_string(self, features):
         # Convert the feature dictionary to a single string for vectorization
-        return " ".join(features.get("permissions", [])) + " " + \
-               " ".join(features.get("activities", [])) + " " + \
-               " ".join(features.get("services", [])) + " " + \
-               " ".join(features.get("receivers", []))
+        feature_string = " ".join(features.get("permissions", [])) + " " + \
+                         " ".join(features.get("activities", [])) + " " + \
+                         " ".join(features.get("services", [])) + " " + \
+                         " ".join(features.get("receivers", []))
+
+        # Add hardcoded secrets
+        for file_name, secrets in features.get("hardcoded_secrets", {}).items():
+            for secret_type, values in secrets.items():
+                feature_string += f" {secret_type}_{file_name}_{'_'.join(values)}"
+
+        # Add identified libraries
+        feature_string += " " + " ".join(features.get("identified_libraries", []))
+
+        # Add vulnerabilities
+        for vuln in features.get("vulnerabilities", []):
+            feature_string += f" {vuln.get('cve', '')}_{vuln.get('severity', '')}"
+
+        # Add insecure communication findings
+        feature_string += " " + " ".join(features.get("insecure_communication", []))
+
+        # Add insecure data storage findings
+        feature_string += " " + " ".join(features.get("insecure_data_storage", []))
+
+        # Add webview vulnerabilities
+        feature_string += " " + " ".join(features.get("webview_vulnerabilities", []))
+
+        return feature_string
 
     def get_similarity(self, features):
         fingerprint_str = self._features_to_string(features)
