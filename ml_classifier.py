@@ -19,6 +19,8 @@ def get_trained_model():
         'dangerous_permissions_ratio': [0.1, 0.4, 0.6, 0.2, 0.1, 0.7, 0.05, 0.8],
         'native_code_ratio': [0.0, 0.1, 0.2, 0.05, 0.0, 0.3, 0.0, 0.5],
         'num_suspicious_api_calls': [0, 5, 10, 2, 1, 15, 0, 20],
+        'num_urls': [0, 3, 7, 1, 0, 10, 0, 12],
+        'num_ips': [0, 1, 3, 0, 0, 5, 0, 6],
         'label': [0, 1, 2, 1, 0, 2, 0, 2]  # 0: Benign, 1: Potentially Malicious, 2: High-Risk
     }
     df = pd.DataFrame(data)
@@ -59,7 +61,9 @@ def classify_apk(features, similarity_score, similar_label):
         'num_webview_vulnerabilities': len(features.get("webview_vulnerabilities", [])),
         'dangerous_permissions_ratio': dangerous_permissions_ratio,
         'native_code_ratio': native_code_ratio,
-        'num_suspicious_api_calls': len(features.get("suspicious_api_calls", []))
+        'num_suspicious_api_calls': len(features.get("suspicious_api_calls", [])),
+        'num_urls': len(features.get("network_indicators", {}).get("urls", [])),
+        'num_ips': len(features.get("network_indicators", {}).get("ips", []))
     }])
 
     prediction = model.predict(feature_vector)

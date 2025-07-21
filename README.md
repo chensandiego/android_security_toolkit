@@ -11,14 +11,17 @@ This toolkit analyzes Android APK files to identify potential security threats. 
     -   Insecure communication (e.g., cleartext HTTP).
     -   Insecure data storage (e.g., `android:allowBackup="true"`, world-readable/writable files).
     -   WebView misconfigurations (e.g., `setJavaScriptEnabled(true)`, `addJavascriptInterface`).
--   **Suspicious API Call Detection:** Scans for the use of potentially dangerous API calls related to SMS, runtime execution, reflection, and more.
--   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features, incorporating a rich set of features including permissions, activities, services, receivers, hardcoded secrets, identified libraries, and detected vulnerabilities.
+    -   SSL/TLS Insecurity (e.g., custom hostname verifiers, custom trust managers, SSL error handling).
+-   **Suspicious API Call Detection:** Scans for an expanded set of potentially dangerous API calls, including those related to SMS, runtime execution, reflection, dynamic code loading, root detection, and more.
+-   **Network Indicators Extraction:** Identifies and extracts URLs and IP addresses embedded within the APK, which can serve as indicators of command-and-control servers or data exfiltration points.
+-   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features, incorporating a rich set of features including permissions, activities, services, receivers, hardcoded secrets, identified libraries, detected vulnerabilities, and network indicators.
 -   **Similarity Analysis:** Compares the fingerprint of an uploaded APK to a knowledge base of known APKs.
 -   **Advanced Machine Learning Classification:** Uses a `GradientBoostingClassifier` to classify APKs as benign, potentially malicious, or high-risk. The model is trained on a more descriptive feature set, including:
     -   Counts of components (permissions, activities, etc.).
     -   Ratio of dangerous permissions.
     -   Ratio of native code.
     -   Number of suspicious API calls.
+    -   Counts of network indicators (URLs and IPs).
 -   **Enhanced Web Interface:** A redesigned, user-friendly web interface for uploading APKs and viewing detailed, organized analysis reports with visual aids.
 
 ## Project Setup

@@ -50,6 +50,11 @@ class BehavioralFingerprint:
         # Add webview vulnerabilities
         feature_string += " " + " ".join(features.get("webview_vulnerabilities", []))
 
+        # Add network indicators
+        network_indicators = features.get("network_indicators", {})
+        feature_string += " " + " ".join(network_indicators.get("urls", []))
+        feature_string += " " + " ".join(network_indicators.get("ips", []))
+
         return feature_string
 
     def get_similarity(self, features):

@@ -213,6 +213,8 @@ def analyze_apk_features(file_path):
     insecure_data_storage_findings = check_insecure_data_storage(a, dx)
     webview_vulnerabilities = check_webview_vulnerabilities(dx)
     suspicious_api_calls = detect_suspicious_api_calls(dx)
+    ssl_tls_issues = check_ssl_tls_issues(dx)
+    network_indicators = extract_network_indicators(dx)
     return {
         "permissions": permissions,
         "activities": activities,
@@ -224,22 +226,43 @@ def analyze_apk_features(file_path):
         "insecure_communication": insecure_communication_findings,
         "insecure_data_storage": insecure_data_storage_findings,
         "webview_vulnerabilities": webview_vulnerabilities,
-        "suspicious_api_calls": suspicious_api_calls
+        "suspicious_api_calls": suspicious_api_calls,
+        "ssl_tls_issues": ssl_tls_issues,
+        "network_indicators": network_indicators
     }
 
 def detect_suspicious_api_calls(dx_object):
     suspicious_calls = []
     suspicious_api_patterns = {
-        "SMS": ["Landroid/telephony/SmsManager;->sendTextMessage"],
-        "RuntimeExecution": ["Ljava/lang/Runtime;->exec"],
-        "Reflection": ["Ljava/lang/reflect/Method;->invoke"],
-        "DexClassLoader": ["Ldalvik/system/DexClassLoader;-><init>"],
-        "Location": ["Landroid/location/LocationManager;->getLastKnownLocation"],
-        "Contacts": ["Landroid/provider/ContactsContract$CommonDataKinds$Phone;->query"],
-        "Camera": ["Landroid/hardware/Camera;->open"],
-        "Microphone": ["Landroid/media/AudioRecord;->startRecording"],
-        "FileSystem": ["Ljava/io/File;->delete", "Ljava/io/File;->mkdir"],
-        "Crypto": ["Ljavax/crypto/Cipher;->getInstance"]
+        "SMS": ["Landroid/telephony/SmsManager;->sendTextMessage", "Landroid/telephony/SmsManager;->sendMultipartTextMessage"],
+        "RuntimeExecution": ["Ljava/lang/Runtime;->exec", "Ljava/lang/ProcessBuilder;->start"],
+        "Reflection": ["Ljava/lang/reflect/Method;->invoke", "Ljava/lang/Class;->forName"],
+        "DexClassLoader": ["Ldalvik/system/DexClassLoader;-><init>", "Ldalvik/system/PathClassLoader;-><init>"],
+        "Location": ["Landroid/location/LocationManager;->getLastKnownLocation", "Landroid/location/LocationManager;->requestLocationUpdates"],
+        "Contacts": ["Landroid/provider/ContactsContract$CommonDataKinds$Phone;->query", "Landroid/content/ContentResolver;->query"],
+        "Camera": ["Landroid/hardware/Camera;->open", "Landroid/hardware/camera2/CameraManager;->openCamera"],
+        "Microphone": ["Landroid/media/AudioRecord;->startRecording", "Landroid/media/MediaRecorder;->start"],
+        "FileSystem": ["Ljava/io/File;->delete", "Ljava/io/File;->mkdir", "Ljava/io/FileOutputStream;-><init>", "Ljava/io/FileInputStream;-><init>"],
+        "Crypto": ["Ljavax/crypto/Cipher;->getInstance", "Ljava/security/MessageDigest;->getInstance"],
+        "Network": ["Ljava/net/URL;->openConnection", "Ljava/net/HttpURLConnection;->connect", "Lorg/apache/http/client/HttpClient;->execute"],
+        "RootDetection": ["Ljava/io/File;->exists", "/system/app/Superuser.apk", "/sbin/su", "/system/bin/su", "/system/xbin/su"],
+        "DataExfiltration": ["Landroid/util/Base64;->encodeToString", "Ljava/net/URLEncoder;->encode"],
+        "Keylogging": ["Landroid/view/View;->setOnKeyListener", "Landroid/text/TextWatcher;->onTextChanged"],
+        "Accessibility": ["Landroid/accessibilityservice/AccessibilityService;->onAccessibilityEvent"],
+        "SMS_Read": ["Landroid/provider/Telephony$Sms;->CONTENT_URI"],
+        "Call_Log": ["Landroid/provider/CallLog$Calls;->CONTENT_URI"],
+        "Account_Info": ["Landroid/accounts/AccountManager;->getAccountsByType"],
+        "Device_Admin": ["Landroid/app/admin/DevicePolicyManager;->isAdminActive"],
+        "Install_Packages": ["Landroid/content/pm/PackageManager;->installPackage"],
+        "Dynamic_Code_Loading": ["Ldalvik/system/DexClassLoader;->loadClass", "Ljava/lang/ClassLoader;->loadClass"],
+        "Code_Reflection": ["Ljava/lang/Class;->getMethod", "Ljava/lang/Class;->getConstructor", "Ljava/lang/reflect/Method;->invoke", "Ljava/lang/reflect/Field;->get", "Ljava/lang/reflect/Field;->set"],
+        "Reflection_Invoke": ["Ljava/lang/reflect/Method;->invoke"],
+        "System_Properties": ["Landroid/os/SystemProperties;->get"],
+        "Clipboard": ["Landroid/content/ClipboardManager;->getText"],
+        "Screenshot": ["Landroid/view/View;->getDrawingCache"],
+        "VPN": ["Landroid/net/VpnService;->prepare"],
+        "Overlay": ["Landroid/view/WindowManager$LayoutParams;->TYPE_SYSTEM_ALERT"],
+        "Battery_Optimization": ["Landroid/os/PowerManager;->isIgnoringBatteryOptimizations"]
     }
 
     for method in dx_object.get_methods():
@@ -252,3 +275,44 @@ def detect_suspicious_api_calls(dx_object):
                         suspicious_calls.append(f"{category}: {call.get_class_name()}->{call.get_name()}")
     
     return list(set(suspicious_calls))
+
+def check_ssl_tls_issues(dx_object):
+    ssl_tls_findings = []
+    insecure_patterns = [
+        "Ljavax/net/ssl/HostnameVerifier;->verify(Ljava/lang/String;Ljavax/net/ssl/SSLSession;)Z", # Custom HostnameVerifier
+        "Ljavax/net/ssl/X509TrustManager;->checkClientTrusted", # Custom TrustManager
+        "Ljavax/net/ssl/X509TrustManager;->checkServerTrusted", # Custom TrustManager
+        "Ljavax/net/ssl/TrustManager;->checkClientTrusted", # Custom TrustManager
+        "Ljavax/net/ssl/TrustManager;->checkServerTrusted", # Custom TrustManager
+        "Lorg/apache/http/conn/ssl/SSLSocketFactory;->ALLOW_ALL_HOSTNAME_VERIFIER", # Apache HttpClient
+        "Landroid/webkit/WebViewClient;->onReceivedSslError", # WebView SSL error handling
+        "Landroid/net/http/SslError;->has  Error", # WebView SSL error handling
+        "Ljavax/net/ssl/HttpsURLConnection;->setDefaultHostnameVerifier", # Global HostnameVerifier
+        "Ljavax/net/ssl/SSLContext;->init", # Custom SSLContext
+    ]
+
+    for method in dx_object.get_methods():
+        if method.is_external():
+            continue
+        for _, call, _ in method.get_xref_ins_and_outs():
+            for pattern in insecure_patterns:
+                if pattern in call.get_class_name() + "->" + call.get_name():
+                    ssl_tls_findings.append(f"Potential SSL/TLS issue: {pattern} detected in {method.get_class_name()}->{method.get_name()}.")
+    return list(set(ssl_tls_findings))
+
+def extract_network_indicators(dx_object):
+    urls = []
+    ips = []
+    url_pattern = r"https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
+    ip_pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+
+    for method in dx_object.get_methods():
+        if method.is_external():
+            continue
+        for _, ref in method.get_literals():
+            if isinstance(ref, str):
+                found_urls = re.findall(url_pattern, ref)
+                urls.extend(found_urls)
+                found_ips = re.findall(ip_pattern, ref)
+                ips.extend(found_ips)
+    return {"urls": list(set(urls)), "ips": list(set(ips))}
