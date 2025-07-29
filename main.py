@@ -52,7 +52,9 @@ async def analyze_apk_endpoint(file: UploadFile = File(...)):
             "insecure_data_storage": features["insecure_data_storage"],
             "webview_vulnerabilities": features["webview_vulnerabilities"],
             "suspicious_api_calls": features["suspicious_api_calls"],
-            "network_indicators": features["network_indicators"]
+            "network_indicators": features["network_indicators"],
+            "intent_filters": features["intent_filters"],
+            "taint_flows": features["taint_flows"]
         }
     }
 

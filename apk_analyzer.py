@@ -1,6 +1,7 @@
 import re
 import requests
 from androguard.misc import AnalyzeAPK
+from taint_analyzer import TaintAnalyzer
 
 def find_hardcoded_secrets(apk_object):
     secrets_found = {}
@@ -146,7 +147,7 @@ def check_insecure_data_storage(a_object, dx_object):
         manifest_xml = a_object.get_android_manifest_xml()
         allow_backup = manifest_xml.xpath("//application/@android:allowBackup")
         if allow_backup and allow_backup[0].lower() == "true":
-            insecure_storage_findings.append("android:allowBackup="true" found in AndroidManifest.xml. Data can be backed up via ADB.")
+            insecure_storage_findings.append("android:allowBackup=\"true\" found in AndroidManifest.xml. Data can be backed up via ADB.")
     except Exception as e:
         print(f"Error checking allowBackup in manifest: {e}")
 
@@ -215,6 +216,11 @@ def analyze_apk_features(file_path):
     suspicious_api_calls = detect_suspicious_api_calls(dx)
     ssl_tls_issues = check_ssl_tls_issues(dx)
     network_indicators = extract_network_indicators(dx)
+    intent_filters = extract_intent_filters(a)
+
+    taint_analyzer = TaintAnalyzer()
+    taint_flows = taint_analyzer.analyze_apk(file_path)
+
     return {
         "permissions": permissions,
         "activities": activities,
@@ -228,7 +234,9 @@ def analyze_apk_features(file_path):
         "webview_vulnerabilities": webview_vulnerabilities,
         "suspicious_api_calls": suspicious_api_calls,
         "ssl_tls_issues": ssl_tls_issues,
-        "network_indicators": network_indicators
+        "network_indicators": network_indicators,
+        "intent_filters": intent_filters,
+        "taint_flows": taint_flows
     }
 
 def detect_suspicious_api_calls(dx_object):
@@ -316,3 +324,45 @@ def extract_network_indicators(dx_object):
                 found_ips = re.findall(ip_pattern, ref)
                 ips.extend(found_ips)
     return {"urls": list(set(urls)), "ips": list(set(ips))}
+
+def extract_intent_filters(a_object):
+    intent_filters = []
+    try:
+        manifest_xml = a_object.get_android_manifest_xml()
+        for component_type in ['activity', 'service', 'receiver']:
+            for component in manifest_xml.xpath(f"//application/{component_type}"):
+                component_name = component.get('{http://schemas.android.com/apk/res/android}name')
+                for intent_filter in component.xpath("intent-filter"):
+                    filter_details = {
+                        "component": component_name,
+                        "type": component_type,
+                        "actions": [],
+                        "categories": [],
+                        "data": []
+                    }
+                    for action in intent_filter.xpath("action"):
+                        filter_details["actions"].append(action.get('{http://schemas.android.com/apk/res/android}name'))
+                    for category in intent_filter.xpath("category"):
+                        filter_details["categories"].append(category.get('{http://schemas.android.com/apk/res/android}name'))
+                    for data in intent_filter.xpath("data"):
+                        data_attrs = {}
+                        if data.get('{http://schemas.android.com/apk/res/android}scheme'):
+                            data_attrs['scheme'] = data.get('{http://schemas.android.com/apk/res/android}scheme')
+                        if data.get('{http://schemas.android.com/apk/res/android}host'):
+                            data_attrs['host'] = data.get('{http://schemas.android.com/apk/res/android}host')
+                        if data.get('{http://schemas.android.com/apk/res/android}port'):
+                            data_attrs['port'] = data.get('{http://schemas.android.com/apk/res/android}port')
+                        if data.get('{http://schemas.android.com/apk/res/android}path'):
+                            data_attrs['path'] = data.get('{http://schemas.android.com/apk/res/android}path')
+                        if data.get('{http://schemas.android.com/apk/res/android}pathPrefix'):
+                            data_attrs['pathPrefix'] = data.get('{http://schemas.android.com/apk/res/android}pathPrefix')
+                        if data.get('{http://schemas.android.com/apk/res/android}pathPattern'):
+                            data_attrs['pathPattern'] = data.get('{http://schemas.android.com/apk/res/android}pathPattern')
+                        if data.get('{http://schemas.android.com/apk/res/android}mimeType'):
+                            data_attrs['mimeType'] = data.get('{http://schemas.android.com/apk/res/android}mimeType')
+                        if data_attrs:
+                            filter_details["data"].append(data_attrs)
+                    intent_filters.append(filter_details)
+    except Exception as e:
+        print(f"Error extracting intent filters: {e}")
+    return intent_filters

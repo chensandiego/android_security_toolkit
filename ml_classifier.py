@@ -21,6 +21,10 @@ def get_trained_model():
         'num_suspicious_api_calls': [0, 5, 10, 2, 1, 15, 0, 20],
         'num_urls': [0, 3, 7, 1, 0, 10, 0, 12],
         'num_ips': [0, 1, 3, 0, 0, 5, 0, 6],
+        'num_intent_filters': [0, 2, 5, 1, 0, 8, 0, 10],
+        'num_actions': [0, 3, 8, 2, 0, 12, 0, 15],
+        'num_categories': [0, 2, 4, 1, 0, 6, 0, 7],
+        'num_data_attributes': [0, 1, 3, 0, 0, 4, 0, 5],
         'label': [0, 1, 2, 1, 0, 2, 0, 2]  # 0: Benign, 1: Potentially Malicious, 2: High-Risk
     }
     df = pd.DataFrame(data)
@@ -63,7 +67,11 @@ def classify_apk(features, similarity_score, similar_label):
         'native_code_ratio': native_code_ratio,
         'num_suspicious_api_calls': len(features.get("suspicious_api_calls", [])),
         'num_urls': len(features.get("network_indicators", {}).get("urls", [])),
-        'num_ips': len(features.get("network_indicators", {}).get("ips", []))
+        'num_ips': len(features.get("network_indicators", {}).get("ips", [])),
+        'num_intent_filters': len(features.get("intent_filters", [])),
+        'num_actions': sum(len(f.get("actions", [])) for f in features.get("intent_filters", [])),
+        'num_categories': sum(len(f.get("categories", [])) for f in features.get("intent_filters", [])),
+        'num_data_attributes': sum(len(f.get("data", [])) for f in features.get("intent_filters", []))
     }])
 
     prediction = model.predict(feature_vector)

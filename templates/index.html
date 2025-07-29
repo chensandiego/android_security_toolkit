@@ -95,6 +95,13 @@
                 </div>
             </div>
 
+            <div class="card">
+                <div class="card-header text-info">Taint Analysis Findings</div>
+                <div class="card-body">
+                    <ul id="taintFlowsList" class="list-group"></ul>
+                </div>
+            </div>
+
             <div class="accordion" id="componentAccordion">
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingActivities">
@@ -230,6 +237,23 @@
                 p.className = 'text-muted';
                 p.textContent = 'None found.';
                 secretsList.appendChild(p);
+            }
+
+            // Populate taint flows
+            const taintFlowsList = document.getElementById('taintFlowsList');
+            taintFlowsList.innerHTML = '';
+            if (features.taint_flows && features.taint_flows.length > 0) {
+                features.taint_flows.forEach(flow => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item';
+                    li.innerHTML = `<strong>Source:</strong> ${flow.source_description} (${flow.source})<br><strong>Sink:</strong> ${flow.sink_description} (${flow.sink})<br><strong>Method:</strong> ${flow.method_path}`;
+                    taintFlowsList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.className = 'list-group-item text-muted';
+                li.textContent = 'No taint flows detected.';
+                taintFlowsList.appendChild(li);
             }
 
             resultsDiv.style.display = 'block';

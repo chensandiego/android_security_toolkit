@@ -55,6 +55,14 @@ class BehavioralFingerprint:
         feature_string += " " + " ".join(network_indicators.get("urls", []))
         feature_string += " " + " ".join(network_indicators.get("ips", []))
 
+        # Add intent filters
+        for intent_filter in features.get("intent_filters", []):
+            feature_string += " " + " ".join(intent_filter.get("actions", []))
+            feature_string += " " + " ".join(intent_filter.get("categories", []))
+            for data_attr in intent_filter.get("data", []):
+                for key, value in data_attr.items():
+                    feature_string += f" {key}_{value}"
+
         return feature_string
 
     def get_similarity(self, features):

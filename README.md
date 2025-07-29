@@ -12,9 +12,11 @@ This toolkit analyzes Android APK files to identify potential security threats. 
     -   Insecure data storage (e.g., `android:allowBackup="true"`, world-readable/writable files).
     -   WebView misconfigurations (e.g., `setJavaScriptEnabled(true)`, `addJavascriptInterface`).
     -   SSL/TLS Insecurity (e.g., custom hostname verifiers, custom trust managers, SSL error handling).
+-   **Taint Analysis:** Implements a basic intra-procedural taint analysis to track the flow of sensitive data (sources) to potentially insecure operations (sinks), helping identify potential data leakage or misuse.
 -   **Suspicious API Call Detection:** Scans for an expanded set of potentially dangerous API calls, including those related to SMS, runtime execution, reflection, dynamic code loading, root detection, and more.
 -   **Network Indicators Extraction:** Identifies and extracts URLs and IP addresses embedded within the APK, which can serve as indicators of command-and-control servers or data exfiltration points.
--   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features, incorporating a rich set of features including permissions, activities, services, receivers, hardcoded secrets, identified libraries, detected vulnerabilities, and network indicators.
+-   **Enhanced Intent Detection:** Extracts detailed intent filter information (actions, categories, data attributes) from `AndroidManifest.xml` to identify potential intent-based vulnerabilities.
+-   **Behavioral Fingerprinting:** Creates a unique fingerprint for each APK based on its features, incorporating a rich set of features including permissions, activities, services, receivers, hardcoded secrets, identified libraries, detected vulnerabilities, network indicators, and detailed intent filter information.
 -   **Similarity Analysis:** Compares the fingerprint of an uploaded APK to a knowledge base of known APKs.
 -   **Advanced Machine Learning Classification:** Uses a `GradientBoostingClassifier` to classify APKs as benign, potentially malicious, or high-risk. The model is trained on a more descriptive feature set, including:
     -   Counts of components (permissions, activities, etc.).
@@ -22,6 +24,7 @@ This toolkit analyzes Android APK files to identify potential security threats. 
     -   Ratio of native code.
     -   Number of suspicious API calls.
     -   Counts of network indicators (URLs and IPs).
+    -   Counts of intent filter components (actions, categories, data attributes).
 -   **Enhanced Web Interface:** A redesigned, user-friendly web interface for uploading APKs and viewing detailed, organized analysis reports with visual aids.
 
 ## Project Setup
