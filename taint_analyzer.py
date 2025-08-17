@@ -1,6 +1,6 @@
 from androguard.misc import AnalyzeAPK
-from androguard.core.bytecodes.apk import APK
-from androguard.core.bytecodes.dvm import DalvikVMFormat
+from androguard.core.apk import APK
+from androguard.core.dex import DEX
 from androguard.core.analysis.analysis import MethodAnalysis
 
 class TaintAnalyzer:
@@ -22,16 +22,10 @@ class TaintAnalyzer:
         }
         self.taint_flows = []
 
-    def analyze_apk(self, apk_path):
+    def analyze(self, a, d, dx):
         """
-        Performs taint analysis on the given APK.
+        Performs taint analysis on the given APK objects.
         """
-        try:
-            a, d, dx = AnalyzeAPK(apk_path)
-        except Exception as e:
-            print(f"Error analyzing APK {apk_path}: {e}")
-            return []
-
         print(f"Starting taint analysis for {a.get_package()}")
 
         for method in dx.get_methods():

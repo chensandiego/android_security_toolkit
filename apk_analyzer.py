@@ -1,7 +1,24 @@
 import re
+import json
+import os
 import requests
 from androguard.misc import AnalyzeAPK
 from taint_analyzer import TaintAnalyzer
+
+NVD_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'nvd_cache.json')
+
+def load_nvd_cache():
+    if os.path.exists(NVD_CACHE_FILE):
+        with open(NVD_CACHE_FILE, 'r') as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {}
+    return {}
+
+def save_nvd_cache(cache):
+    with open(NVD_CACHE_FILE, 'w') as f:
+        json.dump(cache, f, indent=4)
 
 def find_hardcoded_secrets(apk_object):
     secrets_found = {}
@@ -65,7 +82,6 @@ def identify_libraries(dx_object):
         "Lorg/slf4j/", "Lch/qos/logback/", "Lorg/apache/logging/log4j/", "Lcom/google/guava/",
         "Lorg/jetbrains/kotlin/", "Lorg/jetbrains/anko/", "Lio/netty/",
         "Lorg/eclipse/paho/client/mqttv3/", "Lorg/java_websocket/", "Lcom/rabbitmq/client/",
-
         "Lorg/zeromq/", "Lcom/google/protobuf/", "Lcom/google/flatbuffers/",
         "Lcom/google/auto/value/", "Lcom/google/auto/service/", "Lcom/google/dagger/",
         "Lcom/google/inject/"
@@ -80,10 +96,10 @@ def identify_libraries(dx_object):
                 break
     return list(identified_libraries)
 
-def fetch_vulnerabilities_from_nvd(library_name):
-    """
-    Fetches vulnerability data from the National Vulnerability Database (NVD) using API 2.0.
-    """
+def fetch_vulnerabilities_from_nvd(library_name, nvd_cache):
+    if library_name in nvd_cache:
+        return nvd_cache[library_name]
+
     base_url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
     keyword = library_name.split('.')[-1]
     params = {'keywordSearch': keyword}
@@ -105,142 +121,34 @@ def fetch_vulnerabilities_from_nvd(library_name):
                 severity = "N/A"
                 if 'metrics' in cve and 'cvssMetricV2' in cve['metrics'] and cve['metrics']['cvssMetricV2']:
                     severity = cve['metrics']['cvssMetricV2'][0].get('baseSeverity', "N/A")
-
                 vulnerabilities.append({"cve": cve_id, "description": description, "severity": severity})
+        
+        nvd_cache[library_name] = vulnerabilities
         return vulnerabilities
     except requests.exceptions.RequestException as e:
         print(f"Error fetching vulnerabilities for {library_name}: {e}")
         return []
 
-def check_for_vulnerabilities(identified_libraries):
+def check_for_vulnerabilities(identified_libraries, nvd_cache):
     found_vulnerabilities = []
     for lib in identified_libraries:
-        # Fetch live data from NVD
-        nvd_vulnerabilities = fetch_vulnerabilities_from_nvd(lib)
+        nvd_vulnerabilities = fetch_vulnerabilities_from_nvd(lib, nvd_cache)
         if nvd_vulnerabilities:
             found_vulnerabilities.extend(nvd_vulnerabilities)
     return found_vulnerabilities
 
-def check_insecure_communication(dx_object):
+def analyze_methods(dx_object):
     insecure_urls = []
-    for method in dx_object.get_methods():
-        if method.is_external():
-            continue
-        for _, call, _ in method.get_xref_ins_and_outs():
-            if call.get_name() == "Ljava/net/URL;-><init>(Ljava/lang/String;)V":
-                # Look for string literals passed to URL constructor
-                for _, ref in method.get_literals():
-                    if isinstance(ref, str) and ref.startswith("http://"):
-                        insecure_urls.append(ref)
-            elif call.get_name() == "Lorg/apache/http/client/methods/HttpGet;-><init>(Ljava/lang/String;)V":
-                for _, ref in method.get_literals():
-                    if isinstance(ref, str) and ref.startswith("http://"):
-                        insecure_urls.append(ref)
-            # Add more checks for other networking libraries if needed (e.g., OkHttp, Volley)
-    return list(set(insecure_urls))
-
-def check_insecure_data_storage(a_object, dx_object):
     insecure_storage_findings = []
-
-    # Check AndroidManifest.xml for android:allowBackup="true"
-    try:
-        manifest_xml = a_object.get_android_manifest_xml()
-        allow_backup = manifest_xml.xpath("//application/@android:allowBackup")
-        if allow_backup and allow_backup[0].lower() == "true":
-            insecure_storage_findings.append("android:allowBackup=\"true\" found in AndroidManifest.xml. Data can be backed up via ADB.")
-    except Exception as e:
-        print(f"Error checking allowBackup in manifest: {e}")
-
-    # Check for MODE_WORLD_READABLE/WRITEABLE in file operations
-    for method in dx_object.get_methods():
-        if method.is_external():
-            continue
-        for _, call, _ in method.get_xref_ins_and_outs():
-            if call.get_name() == "Landroid/content/Context;->openFileOutput(Ljava/lang/String;I)Ljava/io/FileOutputStream;":
-                # Check if MODE_WORLD_READABLE (0x2) or MODE_WORLD_WRITEABLE (0x4) is used
-                for arg in call.get_args():
-                    if isinstance(arg, int) and (arg & 0x2 or arg & 0x4):
-                        insecure_storage_findings.append(f"Insecure file output mode detected in {method.get_class_name()}->{method.get_name()} (MODE_WORLD_READABLE/WRITEABLE).")
-            elif call.get_name() == "Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;":
-                for arg in call.get_args():
-                    if isinstance(arg, int) and (arg & 0x2 or arg & 0x4):
-                        insecure_storage_findings.append(f"Insecure shared preferences mode detected in {method.get_class_name()}->{method.get_name()} (MODE_WORLD_READABLE/WRITEABLE).")
-
-    # Check for usage of Environment.getExternalStorageDirectory()
-    for method in dx_object.get_methods():
-        if method.is_external():
-            continue
-        for _, call, _ in method.get_xref_ins_and_outs():
-            if call.get_name() == "Landroid/os/Environment;->getExternalStorageDirectory()Ljava/io/File;":
-                insecure_storage_findings.append(f"Usage of Environment.getExternalStorageDirectory() detected in {method.get_class_name()}->{method.get_name()}. Data stored here is publicly accessible.")
-    return list(set(insecure_storage_findings))
-
-def check_webview_vulnerabilities(dx_object):
     webview_findings = []
-    for method in dx_object.get_methods():
-        if method.is_external():
-            continue
-        for _, call, _ in method.get_xref_ins_and_outs():
-            # setJavaScriptEnabled(true)
-            if call.get_name() == "Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V":
-                # Check if the argument is 'true' (1)
-                for arg in call.get_args():
-                    if isinstance(arg, int) and arg == 1:
-                        webview_findings.append(f"WebView.setJavaScriptEnabled(true) detected in {method.get_class_name()}->{method.get_name()}. This can lead to XSS if not handled carefully.")
-            # addJavascriptInterface
-            elif call.get_name() == "Landroid/webkit/WebView;->addJavascriptInterface(Ljava/lang/Object;Ljava/lang/String;)V":
-                webview_findings.append(f"WebView.addJavascriptInterface detected in {method.get_class_name()}->{method.get_name()}. Ensure methods exposed are properly annotated with @JavascriptInterface (API 17+) and sensitive operations are not exposed.")
-            # setAllowFileAccessFromFileURLs(true) or setAllowUniversalAccessFromFileURLs(true)
-            elif call.get_name() == "Landroid/webkit/WebSettings;->setAllowFileAccessFromFileURLs(Z)V":
-                for arg in call.get_args():
-                    if isinstance(arg, int) and arg == 1:
-                        webview_findings.append(f"WebView.setAllowFileAccessFromFileURLs(true) detected in {method.get_class_name()}->{method.get_name()}. This can allow JavaScript in a local file to access other local files.")
-            elif call.get_name() == "Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V":
-                for arg in call.get_args():
-                    if isinstance(arg, int) and arg == 1:
-                        webview_findings.append(f"WebView.setAllowUniversalAccessFromFileURLs(true) detected in {method.get_class_name()}->{method.get_name()}. This can allow JavaScript in a local file to access content from any origin.")
-    return list(set(webview_findings))
-
-def analyze_apk_features(file_path):
-    a, d, dx = AnalyzeAPK(file_path)
-    permissions = a.get_permissions()
-    activities = a.get_activities()
-    services = a.get_services()
-    receivers = a.get_receivers()
-    hardcoded_secrets = find_hardcoded_secrets(a)
-    identified_libraries = identify_libraries(dx)
-    vulnerabilities = check_for_vulnerabilities(identified_libraries)
-    insecure_communication_findings = check_insecure_communication(dx)
-    insecure_data_storage_findings = check_insecure_data_storage(a, dx)
-    webview_vulnerabilities = check_webview_vulnerabilities(dx)
-    suspicious_api_calls = detect_suspicious_api_calls(dx)
-    ssl_tls_issues = check_ssl_tls_issues(dx)
-    network_indicators = extract_network_indicators(dx)
-    intent_filters = extract_intent_filters(a)
-
-    taint_analyzer = TaintAnalyzer()
-    taint_flows = taint_analyzer.analyze_apk(file_path)
-
-    return {
-        "permissions": permissions,
-        "activities": activities,
-        "services": services,
-        "receivers": receivers,
-        "hardcoded_secrets": hardcoded_secrets,
-        "identified_libraries": identified_libraries,
-        "vulnerabilities": vulnerabilities,
-        "insecure_communication": insecure_communication_findings,
-        "insecure_data_storage": insecure_data_storage_findings,
-        "webview_vulnerabilities": webview_vulnerabilities,
-        "suspicious_api_calls": suspicious_api_calls,
-        "ssl_tls_issues": ssl_tls_issues,
-        "network_indicators": network_indicators,
-        "intent_filters": intent_filters,
-        "taint_flows": taint_flows
-    }
-
-def detect_suspicious_api_calls(dx_object):
     suspicious_calls = []
+    ssl_tls_findings = []
+    urls = []
+    ips = []
+    
+    url_pattern = r"https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
+    ip_pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+
     suspicious_api_patterns = {
         "SMS": ["Landroid/telephony/SmsManager;->sendTextMessage", "Landroid/telephony/SmsManager;->sendMultipartTextMessage"],
         "RuntimeExecution": ["Ljava/lang/Runtime;->exec", "Ljava/lang/ProcessBuilder;->start"],
@@ -272,58 +180,141 @@ def detect_suspicious_api_calls(dx_object):
         "Overlay": ["Landroid/view/WindowManager$LayoutParams;->TYPE_SYSTEM_ALERT"],
         "Battery_Optimization": ["Landroid/os/PowerManager;->isIgnoringBatteryOptimizations"]
     }
-
-    for method in dx_object.get_methods():
-        if method.is_external():
-            continue
-        for _, call, _ in method.get_xref_ins_and_outs():
-            for category, apis in suspicious_api_patterns.items():
-                for api in apis:
-                    if api in call.get_class_name() + "->" + call.get_name():
-                        suspicious_calls.append(f"{category}: {call.get_class_name()}->{call.get_name()}")
     
-    return list(set(suspicious_calls))
-
-def check_ssl_tls_issues(dx_object):
-    ssl_tls_findings = []
-    insecure_patterns = [
-        "Ljavax/net/ssl/HostnameVerifier;->verify(Ljava/lang/String;Ljavax/net/ssl/SSLSession;)Z", # Custom HostnameVerifier
-        "Ljavax/net/ssl/X509TrustManager;->checkClientTrusted", # Custom TrustManager
-        "Ljavax/net/ssl/X509TrustManager;->checkServerTrusted", # Custom TrustManager
-        "Ljavax/net/ssl/TrustManager;->checkClientTrusted", # Custom TrustManager
-        "Ljavax/net/ssl/TrustManager;->checkServerTrusted", # Custom TrustManager
-        "Lorg/apache/http/conn/ssl/SSLSocketFactory;->ALLOW_ALL_HOSTNAME_VERIFIER", # Apache HttpClient
-        "Landroid/webkit/WebViewClient;->onReceivedSslError", # WebView SSL error handling
-        "Landroid/net/http/SslError;->has  Error", # WebView SSL error handling
-        "Ljavax/net/ssl/HttpsURLConnection;->setDefaultHostnameVerifier", # Global HostnameVerifier
-        "Ljavax/net/ssl/SSLContext;->init", # Custom SSLContext
+    insecure_ssl_patterns = [
+        "Ljavax/net/ssl/HostnameVerifier;->verify(Ljava/lang/String;Ljavax/net/ssl/SSLSession;)Z",
+        "Ljavax/net/ssl/X509TrustManager;->checkClientTrusted",
+        "Ljavax/net/ssl/X509TrustManager;->checkServerTrusted",
+        "Ljavax/net/ssl/TrustManager;->checkClientTrusted",
+        "Ljavax/net/ssl/TrustManager;->checkServerTrusted",
+        "Lorg/apache/http/conn/ssl/SSLSocketFactory;->ALLOW_ALL_HOSTNAME_VERIFIER",
+        "Landroid/webkit/WebViewClient;->onReceivedSslError",
+        "Landroid/net/http/SslError;->hasError",
+        "Ljavax/net/ssl/HttpsURLConnection;->setDefaultHostnameVerifier",
+        "Ljavax/net/ssl/SSLContext;->init",
     ]
 
     for method in dx_object.get_methods():
         if method.is_external():
             continue
-        for _, call, _ in method.get_xref_ins_and_outs():
-            for pattern in insecure_patterns:
-                if pattern in call.get_class_name() + "->" + call.get_name():
-                    ssl_tls_findings.append(f"Potential SSL/TLS issue: {pattern} detected in {method.get_class_name()}->{method.get_name()}.")
-    return list(set(ssl_tls_findings))
-
-def extract_network_indicators(dx_object):
-    urls = []
-    ips = []
-    url_pattern = r"https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
-    ip_pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
-
-    for method in dx_object.get_methods():
-        if method.is_external():
-            continue
+            
         for _, ref in method.get_literals():
             if isinstance(ref, str):
                 found_urls = re.findall(url_pattern, ref)
                 urls.extend(found_urls)
                 found_ips = re.findall(ip_pattern, ref)
                 ips.extend(found_ips)
-    return {"urls": list(set(urls)), "ips": list(set(ips))}
+
+        for _, call, _ in method.get_xref_ins_and_outs():
+            call_signature = f"{call.get_class_name()}->{call.get_name()}"
+
+            # Insecure Communication
+            if call.get_name() == "Ljava/net/URL;-><init>(Ljava/lang/String;)V" or call.get_name() == "Lorg/apache/http/client/methods/HttpGet;-><init>(Ljava/lang/String;)V":
+                for _, ref in method.get_literals():
+                    if isinstance(ref, str) and ref.startswith("http://"):
+                        insecure_urls.append(ref)
+
+            # Insecure Data Storage
+            if call.get_name() == "Landroid/content/Context;->openFileOutput(Ljava/lang/String;I)Ljava/io/FileOutputStream;":
+                for arg in call.get_args():
+                    if isinstance(arg, int) and (arg & 0x2 or arg & 0x4):
+                        insecure_storage_findings.append(f"Insecure file output mode detected in {method.get_class_name()}->{method.get_name()} (MODE_WORLD_READABLE/WRITEABLE).")
+            elif call.get_name() == "Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;":
+                for arg in call.get_args():
+                    if isinstance(arg, int) and (arg & 0x2 or arg & 0x4):
+                        insecure_storage_findings.append(f"Insecure shared preferences mode detected in {method.get_class_name()}->{method.get_name()} (MODE_WORLD_READABLE/WRITEABLE).")
+            elif call.get_name() == "Landroid/os/Environment;->getExternalStorageDirectory()Ljava/io/File;":
+                insecure_storage_findings.append(f"Usage of Environment.getExternalStorageDirectory() detected in {method.get_class_name()}->{method.get_name()}. Data stored here is publicly accessible.")
+
+            # WebView Vulnerabilities
+            if call.get_name() == "Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V":
+                for arg in call.get_args():
+                    if isinstance(arg, int) and arg == 1:
+                        webview_findings.append(f"WebView.setJavaScriptEnabled(true) detected in {method.get_class_name()}->{method.get_name()}.")
+            elif call.get_name() == "Landroid/webkit/WebView;->addJavascriptInterface(Ljava/lang/Object;Ljava/lang/String;)V":
+                webview_findings.append(f"WebView.addJavascriptInterface detected in {method.get_class_name()}->{method.get_name()}.")
+            elif call.get_name() == "Landroid/webkit/WebSettings;->setAllowFileAccessFromFileURLs(Z)V":
+                for arg in call.get_args():
+                    if isinstance(arg, int) and arg == 1:
+                        webview_findings.append(f"WebView.setAllowFileAccessFromFileURLs(true) detected in {method.get_class_name()}->{method.get_name()}.")
+            elif call.get_name() == "Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V":
+                for arg in call.get_args():
+                    if isinstance(arg, int) and arg == 1:
+                        webview_findings.append(f"WebView.setAllowUniversalAccessFromFileURLs(true) detected in {method.get_class_name()}->{method.get_name()}.")
+
+            # Suspicious API Calls
+            for category, apis in suspicious_api_patterns.items():
+                for api in apis:
+                    if api in call_signature:
+                        suspicious_calls.append(f"{category}: {call_signature}")
+            
+            # SSL/TLS Issues
+            for pattern in insecure_ssl_patterns:
+                if pattern in call_signature:
+                    ssl_tls_findings.append(f"Potential SSL/TLS issue: {pattern} detected in {method.get_class_name()}->{method.get_name()}.")
+
+    return {
+        "insecure_communication": list(set(insecure_urls)),
+        "insecure_data_storage_methods": list(set(insecure_storage_findings)),
+        "webview_vulnerabilities": list(set(webview_findings)),
+        "suspicious_api_calls": list(set(suspicious_calls)),
+        "ssl_tls_issues": list(set(ssl_tls_findings)),
+        "network_indicators": {"urls": list(set(urls)), "ips": list(set(ips))}
+    }
+
+def check_insecure_data_storage_manifest(a_object):
+    insecure_storage_findings = []
+    try:
+        manifest_xml = a_object.get_android_manifest_xml()
+        allow_backup = manifest_xml.xpath("//application/@android:allowBackup")
+        if allow_backup and allow_backup[0].lower() == "true":
+            insecure_storage_findings.append("android:allowBackup=\"true\" found in AndroidManifest.xml. Data can be backed up via ADB.")
+    except Exception as e:
+        print(f"Error checking allowBackup in manifest: {e}")
+    return insecure_storage_findings
+
+def analyze_apk_features(file_path):
+    a, d, dx = AnalyzeAPK(file_path)
+    
+    nvd_cache = load_nvd_cache()
+
+    permissions = a.get_permissions()
+    activities = a.get_activities()
+    services = a.get_services()
+    receivers = a.get_receivers()
+    hardcoded_secrets = find_hardcoded_secrets(a)
+    identified_libraries = identify_libraries(dx)
+    
+    vulnerabilities = check_for_vulnerabilities(identified_libraries, nvd_cache)
+    save_nvd_cache(nvd_cache)
+
+    method_analysis_results = analyze_methods(dx)
+    
+    insecure_data_storage_findings = check_insecure_data_storage_manifest(a)
+    insecure_data_storage_findings.extend(method_analysis_results["insecure_data_storage_methods"])
+    
+    intent_filters = extract_intent_filters(a)
+
+    taint_analyzer = TaintAnalyzer()
+    taint_flows = taint_analyzer.analyze(a, d, dx)
+
+    return {
+        "permissions": permissions,
+        "activities": activities,
+        "services": services,
+        "receivers": receivers,
+        "hardcoded_secrets": hardcoded_secrets,
+        "identified_libraries": identified_libraries,
+        "vulnerabilities": vulnerabilities,
+        "insecure_communication": method_analysis_results["insecure_communication"],
+        "insecure_data_storage": list(set(insecure_data_storage_findings)),
+        "webview_vulnerabilities": method_analysis_results["webview_vulnerabilities"],
+        "suspicious_api_calls": method_analysis_results["suspicious_api_calls"],
+        "ssl_tls_issues": method_analysis_results["ssl_tls_issues"],
+        "network_indicators": method_analysis_results["network_indicators"],
+        "intent_filters": intent_filters,
+        "taint_flows": taint_flows
+    }
 
 def extract_intent_filters(a_object):
     intent_filters = []

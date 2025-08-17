@@ -56,7 +56,7 @@ Download the following files:
 *   `Adware.tar.gz`
 *   `Banking.tar.gz`
 *   `Riskware.tar.gz`
-*   `SMS2.tar.gz`
+*   `SMS.tar.gz` (Note: The original dataset may have multiple SMS files; choose one or combine them).
 
 **Step 2: Organize and Extract the Archives**
 
@@ -71,7 +71,7 @@ tar -xzvf Benign.tar.gz -C Benign/
 tar -xzvf Adware.tar.gz -C Adware/
 tar -xzvf Banking.tar.gz -C Banking/
 tar -xzvf Riskware.tar.gz -C Riskware/
-tar -xzvf SMS2.tar.gz -C SMS/
+tar -xzvf SMS.tar.gz -C SMS/
 ```
 
 **Step 3: Generate the Fingerprints**
@@ -84,13 +84,18 @@ Once you have edited the script, run it from the `android_security_toolkit` dire
 # Make sure your virtual environment is activated
 source venv/bin/activate
 
-# Run the script (this will take a very long time)
+# Run the script
 python build_knowledge_base.py
 ```
 
+**Key Improvements to the Build Process:**
+*   **Resumable:** If the script is stopped, it can be restarted and will automatically skip any APKs that have already been analyzed.
+*   **Incremental Saves:** Progress is saved after each category is completed, so no work is lost if the process is interrupted.
+*   **Faster Processing:** The script is now significantly faster due to parallel processing and caching of vulnerability data.
+
 **Step 4: Activate the New Knowledge Base**
 
-When the script is finished, it will create a file named `known_apks_generated.json`. To use it, rename this file to `known_apks.json`, which will replace the existing placeholder file.
+The script creates and updates a file named `known_apks_generated.json`. When the script is finished, you should rename this file to `known_apks.json` to make it the active knowledge base for the main application.
 
 ```bash
 # This replaces the old placeholder with your new, comprehensive knowledge base
